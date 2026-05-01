@@ -15,6 +15,7 @@ Pourquoi ces modeles ?
 → Chaque modele repond a une question business differente.
 """
 
+import os
 import pandas as pd
 import numpy as np
 import logging
@@ -459,6 +460,96 @@ class DBSCANModel:
 
         return anomalies
 
+# ==============================================================
+# 5b. CLUSTERING HIERARCHIQUE (NON-SUPERVISE)
+# ==============================================================
+from sklearn.cluster import AgglomerativeClustering
+from scipy.cluster.hierarchy import dendrogram, linkage
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+class HierarchicalClusteringModel:
+    """
+    Clustering hierarchique : regroupement agglomeratif.
+
+    Comment ca marche (simple) ?
+    → On commence avec chaque produit comme un cluster separe
+    → A chaque etape, on fusionne les 2 clusters les plus proches
+    → On obtient un arbre (dendrogramme) qui montre les fusions
+
+    Difference avec KMeans :
+    → KMeans : on decide du nombre de clusters a l'avance
+    → Hierarchique : on voit la structure complete, puis on decide
+
+    Pourquoi on l'utilise ?
+    → Le prof le demande explicitement dans l'enonce
+    → Le dendrogramme est un outil visuel puissant
+    """
+
+    def __init__(self):
+        self.model = None
+        self.results = {}
+
+    def train(self, X_scaled, n_clusters=3):
+        """Entraine le clustering hierarchique."""
+        logger.info("\n--- CLUSTERING HIERARCHIQUE ---")
+
+        self.model = AgglomerativeClustering(
+            n_clusters=n_clusters,
+            linkage='ward'
+        )
+
+        labels = self.model.fit_predict(X_scaled)
+
+        score = silhouette_score(X_scaled, labels)
+
+        self.results['labels'] = labels
+        self.results['silhouette'] = score
+        self.results['n_clusters'] = n_clusters
+
+        logger.info(f"  Clusters : {n_clusters}")
+        logger.info(f"  Silhouette score : {score:.4f}")
+
+        unique, counts = np.unique(labels, return_counts=True)
+        for cluster_id, count in zip(unique, counts):
+            pct = count / len(labels) * 100
+            logger.info(f"  Cluster {cluster_id} : {count} produits ({pct:.1f}%)")
+
+        return labels
+
+    def plot_dendrogram(self, X_scaled, output_path="outputs/figures/dendrogram.png"):
+        """
+        Genere le dendrogramme.
+
+        Le dendrogramme montre visuellement comment les clusters
+        se forment a chaque etape de fusion.
+        """
+        logger.info("  Generation du dendrogramme...")
+
+        # On prend un echantillon pour que le dendrogramme soit lisible
+        n_sample = min(200, len(X_scaled))
+        indices = np.random.choice(len(X_scaled), n_sample, replace=False)
+        X_sample = X_scaled[indices]
+
+        # Calcul de la matrice de liaison
+        Z = linkage(X_sample, method='ward')
+
+        # Dessiner le dendrogramme
+        fig, ax = plt.subplots(figsize=(14, 6))
+        dendrogram(Z, ax=ax, truncate_mode='level', p=5,
+                  leaf_font_size=8, color_threshold=0.7*max(Z[:,2]))
+        ax.set_title('Dendrogramme - Clustering Hierarchique')
+        ax.set_xlabel('Produits')
+        ax.set_ylabel('Distance')
+        plt.tight_layout()
+
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        plt.savefig(output_path, dpi=150)
+        plt.close()
+        logger.info(f"  Dendrogramme sauvegarde : {output_path}")
+
+        return Z
 
 # ==============================================================
 # 5. PCA (VISUALISATION)

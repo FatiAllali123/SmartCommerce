@@ -29,7 +29,20 @@ SHOPIFY_STORES = [
     }
 ]
 
-WOOCOMMERCE_STORES = []
+WOOCOMMERCE_STORES = [
+    {
+        "name": "Flavor Profile",
+        "url": "flavorprofile.co",
+        "country": "USA",
+        "category": "Food & Spices"
+    },
+    {
+        "name": "Underwear Expert",
+        "url": "underwearexpert.com",
+        "country": "USA",
+        "category": "Apparel"
+    }
+]
 
 MAX_PAGES_PER_STORE = 10
 PRODUCTS_PER_PAGE = 250

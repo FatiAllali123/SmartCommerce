@@ -527,6 +527,147 @@ Pour chaque strategie : description, mise en oeuvre, impact attendu."""
         else:
             return self._chatbot_with_rules(question, df)
 
+    def generate_scraping_prompt(self, platform):
+        """
+        Genere un prompt de scraping specifique selon la plateforme.
+
+        Fonctionnalite demandee par le prof : "Generer automatiquement
+        des prompts de scraping specifiques selon la plateforme detectee."
+        """
+        if self.mode == "llm":
+            prompt = f"""Tu es un expert en web scraping e-commerce.
+Genere un prompt detaille pour scraper des produits sur la plateforme {platform}.
+Le prompt doit inclure :
+1. L'URL de base a scraper
+2. Les selecteurs CSS ou endpoints API a utiliser
+3. Les champs a extraire (titre, prix, description, note, avis, images)
+4. Les precautions a prendre (rate limiting, User-Agent)
+5. Un exemple de code Python
+
+Reponds en francais."""
+
+            response = self._call_llm(prompt)
+            return response if response else self._scraping_prompt_rules(platform)
+        else:
+            return self._scraping_prompt_rules(platform)
+
+    def _scraping_prompt_rules(self, platform):
+        """Genere un prompt de scraping sans LLM."""
+        prompts = {
+            "shopify": """Prompt de scraping pour Shopify :
+- URL : https://BOUTIQUE/products.json?page=N&limit=250
+- Methode : API JSON via requests
+- Champs : id, title, vendor, product_type, variants[0].price, variants[0].available
+- Pagination : incrementer page jusqu'a reponse vide
+- Delai : 2 secondes entre chaque requete""",
+            "woocommerce": """Prompt de scraping pour WooCommerce :
+- URL API : https://BOUTIQUE/wp-json/wc/store/products
+- Fallback HTML : https://BOUTIQUE/shop/page/N/
+- Selecteurs CSS : li.product, .woocommerce-loop-product__title, .price .amount
+- Champs : name, price, regular_price, description, images
+- Delai : 2 secondes entre chaque requete"""
+        }
+        return prompts.get(platform, f"Plateforme '{platform}' non reconnue. Plateformes supportees : shopify, woocommerce")
+
+    def clean_with_llm(self, text):
+        """
+        Utilise le LLM pour nettoyer et uniformiser un texte.
+
+        Fonctionnalite demandee par le prof : "Reformuler ou nettoyer
+        les donnees extraites (ex : uniformiser les titres de produits)."
+        """
+        if not text or pd.isna(text):
+            return ""
+
+        if self.mode == "llm":
+            prompt = f"""Nettoie et uniformise ce titre de produit e-commerce.
+Enleve les caracteres speciaux inutiles, corrige les fautes, uniformise le format.
+Reponds UNIQUEMENT avec le titre nettoye, rien d'autre.
+
+Titre original : {text}
+
+Titre nettoye :"""
+
+            response = self._call_llm(prompt)
+            return response.strip() if response else text
+        else:
+            # Mode regles : nettoyage basique
+            import re
+            clean = re.sub(r'\s+', ' ', str(text)).strip()
+            clean = re.sub(r'[^\w\s\-\']', '', clean)
+            return clean
+
+    def generate_client_profile(self, df):
+        """
+        Genere un profil client base sur les produits les plus consultes.
+
+        Fonctionnalite demandee par le prof : "Creer un profil client
+        base sur les produits les plus consultes."
+        """
+        logger.info("Generation du profil client...")
+
+        # Analyse des top produits
+        top_products = df.nlargest(50, 'final_score')
+
+        # Categories preferees
+        top_cats = top_products['product_type'].value_counts().head(5)
+
+        # Fourchette de prix preferee
+        avg_price = top_products['price'].mean()
+
+        # Boutiques preferees
+        top_stores = top_products['store_name'].value_counts().head(3)
+
+        if self.mode == "llm":
+            context = f"""
+Top categories : {top_cats.to_dict()}
+Prix moyen prefere : {avg_price:.2f}$
+Boutiques preferees : {top_stores.to_dict()}
+Nombre de produits analyses : {len(top_products)}
+"""
+            prompt = f"""Tu es un analyste marketing. Base sur les produits les plus populaires,
+genere un profil client type en francais.
+
+Donnees : {context}
+
+Le profil doit contenir :
+1. Demographie probable (age, genre, revenu)
+2. Preferences de prix
+3. Categories preferees
+4. Comportement d'achat
+5. Recommandations marketing pour ce profil"""
+
+            response = self._call_llm(prompt)
+            return response if response else self._client_profile_rules(top_cats, avg_price, top_stores)
+        else:
+            return self._client_profile_rules(top_cats, avg_price, top_stores)
+
+    def _client_profile_rules(self, top_cats, avg_price, top_stores):
+        """Profil client sans LLM."""
+        report = []
+        report.append("PROFIL CLIENT TYPE")
+        report.append("=" * 40)
+        report.append(f"\n1. CATEGORIES PREFEREES :")
+        for cat, count in top_cats.items():
+            report.append(f"   - {cat} : {count} produits populaires")
+        report.append(f"\n2. BUDGET MOYEN : {avg_price:.2f}$")
+        if avg_price < 30:
+            report.append("   Profil : acheteur budget-conscious")
+        elif avg_price < 100:
+            report.append("   Profil : acheteur milieu de gamme")
+        else:
+            report.append("   Profil : acheteur premium")
+        report.append(f"\n3. BOUTIQUES PREFEREES :")
+        for store, count in top_stores.items():
+            report.append(f"   - {store} : {count} produits dans le top")
+        report.append(f"\n4. RECOMMANDATIONS :")
+        report.append("   - Cibler les promotions sur les categories preferees")
+        report.append("   - Proposer des bundles dans la fourchette de prix")
+        report.append("   - Envoyer des alertes de restock pour les produits en rupture")
+        return "\n".join(report)
+
+
+
     def _chatbot_with_llm(self, question, df):
         """Reponse chatbot via LLM avec contexte enrichi."""
 
@@ -646,6 +787,11 @@ Voici les donnees :
 
 Question : {question}
 
+Pour repondre, suis cette methode de raisonnement :
+1. D'abord, identifie quelles donnees du contexte sont pertinentes pour la question
+2. Ensuite, analyse ces donnees pour extraire les informations cles
+3. Enfin, formule une reponse claire et structuree
+
 Reponds de maniere precise, en citant des chiffres et des noms de produits quand c'est pertinent.
 Sois concis mais complet. Si la question ne correspond a aucune donnee disponible, dis-le clairement."""
 
@@ -662,7 +808,7 @@ Sois concis mais complet. Si la question ne correspond a aucune donnee disponibl
             return f"La base contient {len(df)} produits repartis sur {df['store_name'].nunique()} boutiques."
 
         # Prix
-        if any(word in q for word in ['prix', 'cher', 'cout', 'coute']):
+        if any(word in q for word in ['prix', 'cher', 'cout', 'coute', 'coût', 'coûte', 'couter', 'coûter']):
             return (f"Le prix moyen est de {df['price'].mean():.2f}$. "
                     f"Le moins cher : {df['price'].min():.2f}$. "
                     f"Le plus cher : {df['price'].max():.2f}$.")
@@ -749,11 +895,31 @@ def generate_full_report(df, api_key=None):
     with open("outputs/marketing_strategies.txt", "w", encoding="utf-8") as f:
         f.write(strategies)
 
+    # 5. Profil client
+    print("\n5. Profil client type...")
+    profile = enricher.generate_client_profile(df)
+    with open("outputs/client_profile.txt", "w", encoding="utf-8") as f:
+        f.write(profile)
+
+    # 6. Prompt de scraping genere
+    print("\n6. Prompts de scraping generes...")
+    for platform in ["shopify", "woocommerce"]:
+        prompt = enricher.generate_scraping_prompt(platform)
+        print(f"  {platform} : {prompt[:80]}...")
+
+    # 7. Nettoyage LLM (exemple)
+    print("\n7. Nettoyage LLM des titres...")
+    sample = df['title'].head(3).apply(enricher.clean_with_llm)
+    print(f"  Exemples nettoyes : {sample.tolist()}")
+
+
     print("\nTous les rapports generes dans outputs/")
 
     return {
         'summaries': summaries,
         'competitive': competitive,
         'trends': trends,
-        'strategies': strategies
+        'strategies': strategies,
+        'profile': profile
     }
+

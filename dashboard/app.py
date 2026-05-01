@@ -616,8 +616,36 @@ elif page_id == "clusters":
                          yaxis=dict(gridcolor='rgba(255,255,255,0.05)'))
         st.plotly_chart(fig, use_container_width=True)
 
+    # ==============================================================
+    # VARIANCE EXPLIQUEE (PCA)
+    # ==============================================================
+    st.subheader("📐 Variance expliquee (PCA)")
+    from sklearn.decomposition import PCA as PCAFull
+    pca_full = PCAFull(n_components=min(len(cluster_features), 10))
+    pca_full.fit(X_scaled)
+    var_df = pd.DataFrame({
+        'Composante': [f'PC{i+1}' for i in range(len(pca_full.explained_variance_ratio_))],
+        'Variance (%)': (pca_full.explained_variance_ratio_ * 100).round(1),
+        'Cumul (%)': (pca_full.explained_variance_ratio_.cumsum() * 100).round(1)
+    })
+    fig = px.bar(var_df, x='Composante', y='Variance (%)',
+                 text='Variance (%)',
+                 color_discrete_sequence=['#667eea'])
+    fig.add_scatter(x=var_df['Composante'], y=var_df['Cumul (%)'],
+                    mode='lines+markers', name='Cumul (%)',
+                    line=dict(color='#f093fb', width=2))
+    fig.update_traces(textposition='outside', textfont_color='white')
+    fig.update_layout(height=350,
+                     plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                     font_color='#a8a4b8',
+                     xaxis=dict(gridcolor='rgba(255,255,255,0.05)'),
+                     yaxis=dict(gridcolor='rgba(255,255,255,0.05)'),
+                     legend=dict(bgcolor='rgba(0,0,0,0)'))
+    st.plotly_chart(fig, use_container_width=True)
+
     # Profil
     st.subheader("📋 Profil des clusters")
+
     df_temp = df.copy()
     df_temp['cluster'] = cluster_labels
     cluster_profile = df_temp.groupby('cluster').agg(
@@ -633,7 +661,8 @@ elif page_id == "clusters":
                                 'Taux succes (%)', 'Variantes moy.', 'Images moy.']
     st.dataframe(cluster_profile, use_container_width=True)
     
-        # Noms des clusters
+
+    # Noms des clusters
     st.subheader("🏷️ Interpretation des clusters")
     cluster_names = {}
     for c in sorted(df_temp['cluster'].unique()):
@@ -959,8 +988,8 @@ elif page_id == "chatbot":
                 st.session_state['report_tendances'] = report
             elif report_type == "💡 Strategies marketing":
                 report = enricher.marketing_strategies(df)
-                report = enricher.marketing_strategies(df)
                 st.session_state['report_marketing'] = report
+
             elif report_type == "📝 Resumes produits":
                 summaries = enricher.summarize_products(df, n_products=10)
                 st.session_state['report_resumes'] = summaries

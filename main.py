@@ -11,8 +11,10 @@ import logging
 import pandas as pd
 from ml.models import (
     RandomForestModel, XGBoostModel, KMeansModel,
-    DBSCANModel, PCAModel, AssociationRulesMiner
+    DBSCANModel, PCAModel, AssociationRulesMiner,
+    HierarchicalClusteringModel
 )
+
 from ml.evaluation import ModelVisualizer
 from llm.enrichment import LLMEnricher, generate_full_report
 
@@ -78,6 +80,12 @@ def run_ml_pipeline():
     anomalies = dbscan.analyze_anomalies(df)
     if len(anomalies) > 0:
         anomalies.to_csv("outputs/anomalies.csv", index=False)
+
+    # Clustering hierarchique
+    hier = HierarchicalClusteringModel()
+    hier_labels = hier.train(X_scaled, n_clusters=3)
+    hier.plot_dendrogram(X_scaled)
+
 
     # PCA
     pca = PCAModel()

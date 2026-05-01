@@ -643,6 +643,15 @@ elif page_id == "clusters":
                      legend=dict(bgcolor='rgba(0,0,0,0)'))
     st.plotly_chart(fig, use_container_width=True)
 
+
+    # Dendrogramme (Clustering hierarchique)
+    st.subheader("🌳 Dendrogramme (Clustering hierarchique)")
+    if os.path.exists("outputs/figures/dendrogram.png"):
+        st.image("outputs/figures/dendrogram.png",
+                 caption="Dendrogramme - Fusion hierarchique des clusters")
+    else:
+        st.info("Lancez d'abord `python main.py` pour generer le dendrogramme.")
+
     # Profil
     st.subheader("📋 Profil des clusters")
 

@@ -64,6 +64,36 @@ class LLMEnricher:
         else:
             logger.info("Aucune cle API Groq. Mode regles active.")
 
+        # Initialiser MCP
+        self.mcp_available = False
+        self._init_mcp()
+
+
+    def _init_mcp(self):
+        """Initialise le client MCP pour l'acces responsable aux donnees."""
+        try:
+            import sys
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            from mcp.mcp_simulation import MCPClient, MCPServer, MCPHost
+
+            self.mcp_host = MCPHost()
+            self.mcp_client = MCPClient("LLMEnricher")
+            self.mcp_server = MCPServer("ScrapingData")
+
+            # Enregistrer les composants
+            self.mcp_host.register_client(self.mcp_client)
+            self.mcp_host.register_server(self.mcp_server)
+
+            # Permissions
+            self.mcp_host.add_permission("LLMEnricher", "read_products")
+            self.mcp_host.add_permission("LLMEnricher", "read_stats")
+
+            logger.info("MCP initialise : acces responsable active")
+            self.mcp_available = True
+        except Exception as e:
+            logger.warning(f"MCP non disponible : {e}")
+            self.mcp_available = False
+
     def _call_llm(self, prompt):
         """Appelle le LLM avec un prompt."""
         if self.llm is None:

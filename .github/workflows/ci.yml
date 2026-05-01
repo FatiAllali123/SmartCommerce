@@ -48,6 +48,11 @@ jobs:
           python -c "from ml.models import RandomForestModel, XGBoostModel, KMeansModel; print('Models OK')"
           python -c "from llm.enrichment import LLMEnricher; print('LLM OK')"
 
+      - name: Run tests
+        run: |
+          pip install pytest
+          pytest tests/ -v --tb=short
+
       # 6. Verifier que les donnees existent
       - name: Check data files
         run: |

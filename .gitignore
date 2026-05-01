@@ -1,0 +1,24 @@
+# Environnement virtuel
+venv/
+
+# Variables d'environnement (cle API)
+.env
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+__pycache__
+
+# Donnees generees
+outputs/
+data/raw/
+data/processed/
+
+# IDE
+.vscode/
+.idea/
+
+# Systeme
+.DS_Store
+Thumbs.db

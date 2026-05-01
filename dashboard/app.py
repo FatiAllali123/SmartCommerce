@@ -632,6 +632,34 @@ elif page_id == "clusters":
     cluster_profile.columns = ['Taille', 'Prix moyen ($)', 'Remise moy. (%)',
                                 'Taux succes (%)', 'Variantes moy.', 'Images moy.']
     st.dataframe(cluster_profile, use_container_width=True)
+    
+        # Noms des clusters
+    st.subheader("🏷️ Interpretation des clusters")
+    cluster_names = {}
+    for c in sorted(df_temp['cluster'].unique()):
+        data = df_temp[df_temp['cluster'] == c]
+        avg_price = data['price'].mean()
+        avg_discount = data['discount_pct'].mean()
+        avg_success = data['produit_succes'].mean()
+
+        if avg_price > 200 and avg_success > 0.5:
+            name = "Premium & Succes"
+        elif avg_price > 100:
+            name = "Haut de gamme"
+        elif avg_discount > 30:
+            name = "Discount & Solde"
+        elif avg_success > 0.2:
+            name = "Populaire"
+        elif avg_price < 30:
+            name = "Entree de gamme"
+        else:
+            name = "Standard"
+
+        cluster_names[c] = name
+        st.markdown(f"**Cluster {c} = \"{name}\"** — "
+                    f"{len(data)} produits, prix moy: {avg_price:.0f}$, "
+                    f"remise: {avg_discount:.0f}%, succes: {avg_success*100:.0f}%")
+
 
     # Radar
     st.subheader("🎯 Comparaison radar")
@@ -854,7 +882,8 @@ elif page_id == "chatbot":
     enricher = LLMEnricher(api_key=api_key)
 
     st.info(f"Mode : **{enricher.mode}** | "
-            f"Pour activer le mode LLM, definissez la variable d'environnement OPENAI_API_KEY")
+            f"Pour activer le mode LLM, definissez la variable d'environnement GROQ_API_KEY dans le fichier .env")
+
 
     # Questions suggerees
     st.subheader("Questions suggerees")

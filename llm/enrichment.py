@@ -72,27 +72,23 @@ class LLMEnricher:
     def _init_mcp(self):
         """Initialise le client MCP pour l'acces responsable aux donnees."""
         try:
-            import sys
-            sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            from mcp.mcp_simulation import MCPClient, MCPServer, MCPHost
-
-            self.mcp_host = MCPHost()
-            self.mcp_client = MCPClient("LLMEnricher")
-            self.mcp_server = MCPServer("ScrapingData")
-
-            # Enregistrer les composants
-            self.mcp_host.register_client(self.mcp_client)
-            self.mcp_host.register_server(self.mcp_server)
-
-            # Permissions
-            self.mcp_host.add_permission("LLMEnricher", "read_products")
-            self.mcp_host.add_permission("LLMEnricher", "read_stats")
-
+            from mcp.mcp_simulation import MCPHost
+            self.mcp_host = MCPHost("SmartCommerce Dashboard")
+            self.mcp_server = self.mcp_host.create_server(
+                name="ScrapingData",
+                data_path="data/processed/products_clean.csv",
+                permissions=["read:products", "read:stats", "read:top_k"]
+            )
+            self.mcp_client = self.mcp_host.create_client(
+                client_id="LLMEnricher",
+                connect_to=["ScrapingData"]
+            )
             logger.info("MCP initialise : acces responsable active")
             self.mcp_available = True
         except Exception as e:
             logger.warning(f"MCP non disponible : {e}")
             self.mcp_available = False
+
 
     def _call_llm(self, prompt):
         """Appelle le LLM avec un prompt."""

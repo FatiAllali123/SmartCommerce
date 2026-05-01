@@ -397,23 +397,75 @@ def create_kfp_pipeline():
             packages_to_install=["pandas", "numpy", "scikit-learn"]
         )
         def preprocess_component(input_path: str, output_path: str) -> str:
-            """Nettoie les donnees brutes et cree les features."""
+            """Nettoie les donnees brutes et cree les features avec le vrai score composite."""
             import pandas as pd
             import numpy as np
             import re
             import os
 
             df = pd.read_csv(input_path)
+
+            # Nettoyage
             df = df[df['price'] > 0].copy()
             df = df.drop_duplicates(subset=['product_id'], keep='first')
+            df = df[(df['price'] >= 0.5) & (df['price'] <= 5000)]
+
+            # Nettoyage descriptions
             df['description_clean'] = df['description'].apply(
                 lambda x: re.sub(r'<[^>]+>', ' ', str(x)) if pd.notna(x) else ""
             )
+            df['description_length'] = df['description_clean'].str.len()
+            df['word_count_description'] = df['description_clean'].str.split().str.len()
+
+            # Feature engineering
             df['has_discount'] = (df['discount_pct'] > 0).astype(int)
+            df['has_images'] = (df['images_count'] > 0).astype(int)
+            df['has_variants'] = (df['variants_count'] > 1).astype(int)
             df['is_available'] = df['available'].astype(int)
-            df['final_score'] = (df['is_available'] * 0.3 + df['has_discount'] * 0.2 +
-                                (df['price'] / df['price'].max()) * 0.5)
-            df['produit_succes'] = (df['final_score'] >= df['final_score'].quantile(0.8)).astype(int)
+            df['tags_count'] = df['tags'].apply(
+                lambda x: len(str(x).split(',')) if pd.notna(x) and str(x).strip() else 0
+            )
+
+            # Prix categories
+            df['price_category'] = pd.cut(
+                df['price'], bins=[0, 20, 50, 100, 200, 1000],
+                labels=['budget', 'low', 'mid', 'high', 'premium']
+            )
+
+            # SCORE COMPOSITE REEL (6 criteres ponderes)
+            # Critere 1 : Disponibilite (25%)
+            score_availability = df['is_available'].astype(float) * 0.25
+
+            # Critere 2 : Prix optimal (20%)
+            price_median = df['price'].median()
+            price_std = df['price'].std()
+            score_price = np.clip(1 - abs(df['price'] - price_median) / (2 * price_std), 0, 1) * 0.20
+
+            # Critere 3 : Variantes (15%)
+            max_variants = df['variants_count'].max()
+            score_variants = (df['variants_count'] / max_variants).clip(0, 1) * 0.15 if max_variants > 0 else 0
+
+            # Critere 4 : Images (15%)
+            max_images = df['images_count'].max()
+            score_images = (df['images_count'] / max_images).clip(0, 1) * 0.15 if max_images > 0 else 0
+
+            # Critere 5 : Description (15%)
+            desc_len = df['word_count_description']
+            score_description = np.clip(desc_len / desc_len.quantile(0.9), 0, 1) * 0.15
+
+            # Critere 6 : Remise (10%)
+            score_discount = np.clip(df['discount_pct'] / 100, 0, 1) * 0.10
+
+            # Score final
+            df['final_score'] = (
+                score_availability + score_price + score_variants +
+                score_images + score_description + score_discount
+            ).round(3)
+
+            # Variable cible : top 20%
+            threshold = df['final_score'].quantile(0.8)
+            df['produit_succes'] = (df['final_score'] >= threshold).astype(int)
+
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             df.to_csv(output_path, index=False)
             return output_path

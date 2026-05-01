@@ -125,18 +125,43 @@ deploymentSpec:
           '
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
           \ *\n\ndef preprocess_component(input_path: str, output_path: str) -> str:\n\
-          \    \"\"\"Nettoie les donnees brutes et cree les features.\"\"\"\n    import\
-          \ pandas as pd\n    import numpy as np\n    import re\n    import os\n\n\
-          \    df = pd.read_csv(input_path)\n    df = df[df['price'] > 0].copy()\n\
-          \    df = df.drop_duplicates(subset=['product_id'], keep='first')\n    df['description_clean']\
-          \ = df['description'].apply(\n        lambda x: re.sub(r'<[^>]+>', ' ',\
-          \ str(x)) if pd.notna(x) else \"\"\n    )\n    df['has_discount'] = (df['discount_pct']\
-          \ > 0).astype(int)\n    df['is_available'] = df['available'].astype(int)\n\
-          \    df['final_score'] = (df['is_available'] * 0.3 + df['has_discount']\
-          \ * 0.2 +\n                        (df['price'] / df['price'].max()) * 0.5)\n\
-          \    df['produit_succes'] = (df['final_score'] >= df['final_score'].quantile(0.8)).astype(int)\n\
-          \    os.makedirs(os.path.dirname(output_path), exist_ok=True)\n    df.to_csv(output_path,\
-          \ index=False)\n    return output_path\n\n"
+          \    \"\"\"Nettoie les donnees brutes et cree les features avec le vrai\
+          \ score composite.\"\"\"\n    import pandas as pd\n    import numpy as np\n\
+          \    import re\n    import os\n\n    df = pd.read_csv(input_path)\n\n  \
+          \  # Nettoyage\n    df = df[df['price'] > 0].copy()\n    df = df.drop_duplicates(subset=['product_id'],\
+          \ keep='first')\n    df = df[(df['price'] >= 0.5) & (df['price'] <= 5000)]\n\
+          \n    # Nettoyage descriptions\n    df['description_clean'] = df['description'].apply(\n\
+          \        lambda x: re.sub(r'<[^>]+>', ' ', str(x)) if pd.notna(x) else \"\
+          \"\n    )\n    df['description_length'] = df['description_clean'].str.len()\n\
+          \    df['word_count_description'] = df['description_clean'].str.split().str.len()\n\
+          \n    # Feature engineering\n    df['has_discount'] = (df['discount_pct']\
+          \ > 0).astype(int)\n    df['has_images'] = (df['images_count'] > 0).astype(int)\n\
+          \    df['has_variants'] = (df['variants_count'] > 1).astype(int)\n    df['is_available']\
+          \ = df['available'].astype(int)\n    df['tags_count'] = df['tags'].apply(\n\
+          \        lambda x: len(str(x).split(',')) if pd.notna(x) and str(x).strip()\
+          \ else 0\n    )\n\n    # Prix categories\n    df['price_category'] = pd.cut(\n\
+          \        df['price'], bins=[0, 20, 50, 100, 200, 1000],\n        labels=['budget',\
+          \ 'low', 'mid', 'high', 'premium']\n    )\n\n    # SCORE COMPOSITE REEL\
+          \ (6 criteres ponderes)\n    # Critere 1 : Disponibilite (25%)\n    score_availability\
+          \ = df['is_available'].astype(float) * 0.25\n\n    # Critere 2 : Prix optimal\
+          \ (20%)\n    price_median = df['price'].median()\n    price_std = df['price'].std()\n\
+          \    score_price = np.clip(1 - abs(df['price'] - price_median) / (2 * price_std),\
+          \ 0, 1) * 0.20\n\n    # Critere 3 : Variantes (15%)\n    max_variants =\
+          \ df['variants_count'].max()\n    score_variants = (df['variants_count']\
+          \ / max_variants).clip(0, 1) * 0.15 if max_variants > 0 else 0\n\n    #\
+          \ Critere 4 : Images (15%)\n    max_images = df['images_count'].max()\n\
+          \    score_images = (df['images_count'] / max_images).clip(0, 1) * 0.15\
+          \ if max_images > 0 else 0\n\n    # Critere 5 : Description (15%)\n    desc_len\
+          \ = df['word_count_description']\n    score_description = np.clip(desc_len\
+          \ / desc_len.quantile(0.9), 0, 1) * 0.15\n\n    # Critere 6 : Remise (10%)\n\
+          \    score_discount = np.clip(df['discount_pct'] / 100, 0, 1) * 0.10\n\n\
+          \    # Score final\n    df['final_score'] = (\n        score_availability\
+          \ + score_price + score_variants +\n        score_images + score_description\
+          \ + score_discount\n    ).round(3)\n\n    # Variable cible : top 20%\n \
+          \   threshold = df['final_score'].quantile(0.8)\n    df['produit_succes']\
+          \ = (df['final_score'] >= threshold).astype(int)\n\n    os.makedirs(os.path.dirname(output_path),\
+          \ exist_ok=True)\n    df.to_csv(output_path, index=False)\n    return output_path\n\
+          \n"
         image: python:3.10-slim
     exec-topk-component:
       container:

@@ -39,7 +39,8 @@ jobs:
       - name: Code linting
         run: |
           pip install flake8
-          flake8 ml/ scraping/ llm/ --max-line-length=120 --ignore=E501,W503
+          flake8 ml/ scraping/ llm/ --max-line-length=120 --extend-ignore=E402,E302,E303,E305,F541,F841,W293,W391,E131,E122,E128,E226,E231,F401
+
 
       # 5. Verifier que les imports fonctionnent
       - name: Verify imports

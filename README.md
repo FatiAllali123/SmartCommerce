@@ -5,6 +5,8 @@
 ---
 
 ## 📁 Architecture du projet
+
+```bash
 projet_ecommerce/
 ├── scraping/               # Agents A2A (Shopify + WooCommerce)
 │   ├── agents.py
@@ -38,7 +40,7 @@ projet_ecommerce/
 ├── Dockerfile
 ├── requirements.txt
 └── README.md
-
+```
 ---
 
 ## ⚙️ Installation
